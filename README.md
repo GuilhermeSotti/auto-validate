@@ -134,9 +134,3 @@ bot_cab/
   - `FetchXmlClient` (mock de `run_command`)  
   - `DataverseClient` (mock de `requests`)  
   - `Processor` (integração de clientes)  
-
----
-
-## 📄 Licença
-
-MIT © Vale
