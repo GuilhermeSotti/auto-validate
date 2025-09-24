@@ -24,7 +24,7 @@
 
 1. Clone o repositório:  
    ```bash
-   git clone https://seurepositorio/vale-devops/bot_cab.git
+   git clone https://github.com/GuilhermeSotti/auto-validate.git
    cd bot_cab
    ```
 
