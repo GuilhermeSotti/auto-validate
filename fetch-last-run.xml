@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
+<fetch mapping="logical" output-format="xml-platform" distinct="false" page="1" page-size="1">
+  <entity name="flowsession">
+    <attribute name="flowsessionid" />
+    <attribute name="startedon" />
+    <link-entity name="workflow" from="workflowid" to="regardingobjectid" alias="wf" link-type="inner">
+      <filter type="and">
+        <condition attribute="name" operator="eq" value="DF_Prova_de_Conceito" />
+      </filter>
+    </link-entity>
+    <order attribute="startedon" descending="true" />
+  </entity>
+</fetch>

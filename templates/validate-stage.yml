@@ -1,0 +1,113 @@
+parameters:
+  - name: solutionName
+    type: string
+  - name: environmentName
+    type: string
+  - name: environmentUrl
+    type: string
+  - name: directory
+    type: string
+  - name: artifactDir
+    type: string
+  - name: conn
+    type: string
+  - name: connAzCli
+    type: string
+  - name: connAzTask
+    type: string
+  - name: appId
+    type: string
+  - name: appIdAz
+    type: string
+
+stages:
+  - stage: validate
+    displayName: '🔍 Validar Solução em QA'
+    condition: eq(variables['ferramenta'], 'PAD')
+    dependsOn: 
+    - init
+    - pack
+    - deploy_qa
+    jobs:
+      - job: validate_solution
+        displayName: '🔍 Validar & Analisar'
+        pool:
+          vmImage: 'windows-latest'
+        steps:
+          - checkout: self
+            displayName: 'Dev: Checkout'
+            persistCredentials: true
+
+          #- task: Cache@2
+          #  displayName: 'Dev: Cache pip'
+          #  inputs:
+          #    key: 'pip | "$(Agent.OS)" | **/requirements.txt'
+          #    restoreKeys: 'pip | "$(Agent.OS)"'
+          #    path: ~/.cache/pip
+
+          - task: UsePythonVersion@0
+            displayName: 'Dev: Configurar Python 3.x'
+            inputs:
+              versionSpec: '3.x'
+              addToPath: true
+
+          - task: Bash@3
+            displayName: 'Dev: Instalar dependências'
+            inputs:
+              filePath: 'scripts/py/install_requirements.sh'
+              arguments: '--requirements-path "requirements.txt"'
+
+          - task: Bash@3
+            displayName: 'Dev: Verificar Python'
+            inputs:
+              filePath: 'scripts/py/verify_python.sh'
+
+          - task: PowerPlatformToolInstaller@2
+            displayName: 'Dev: Instalar PAC CLI'
+            inputs:
+              DefaultVersion: false
+              AddToolsToPath: true
+
+          - task: DownloadBuildArtifacts@1
+            displayName: '⬇️ Baixar Artefato'
+            inputs:
+              buildType:    'current'
+              downloadType: 'single'
+              artifactName: 'solution-managed'
+              downloadPath: '${{ parameters.directory }}/bot_cab'
+
+          - task: AzureCLI@2
+            displayName: '🧠 Executar Análise da Solução'
+            inputs:
+              azureSubscription: ${{ parameters.connAzTask }}
+              addSpnToEnvironment: true
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                pac auth create \
+                  --name pipelineAuth \
+                  --environment "${{ parameters.environmentUrl }}" \
+                  --applicationId "${{ parameters.appId }}" \
+                  --tenant "$tenantId" \
+                  --azureDevOpsFederated
+
+                pac auth select --name pipelineAuth
+
+                chmod +x scripts/validate/run_analysis.sh
+                scripts/validate/run_analysis.sh \
+                  --solution-name    "${{ parameters.solutionName }}" \
+                  --environment-url  "${{ parameters.environmentUrl }}" \
+                  --environment-name "${{ parameters.environmentName }}" \
+                  --application-id   "${{ parameters.appId }}" \
+                  --output-dir       "${{ parameters.artifactDir }}" \
+                  --base-dir         "${{ parameters.directory }}"
+            env:
+              PAC_ADO_ID_TOKEN_REQUEST_TOKEN: $(System.AccessToken)
+              PAC_ADO_ID_TOKEN_REQUEST_URL: >-
+                $(System.OidcRequestUri)?serviceConnectionId=${{ parameters.conn }}&api-version=7.2-preview.1
+              SERVICE_PRINCIPAL_ID: ${{ parameters.appIdAz }}
+            continueOnError: true
+
+          - publish: '${{ parameters.artifactDir }}'
+            displayName: '💾 Publicar Relatório'
+            artifact: 'solution-analysis'

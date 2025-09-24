@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='utf-8'?>
+<fetch version="1.0" output-format="xml-platform" mapping="logical">
+  <entity name="flowsession">
+    <attribute name="flowsessionid" />
+    <attribute name="startedon" />
+    <attribute name="completedon" />
+    <attribute name="statuscode" />
+    <attribute name="errorcode" />
+    <attribute name="errormessage" />
+    <filter type="and">
+        <condition attribute="flowsessionid" operator="eq" value="20242998-6e93-4ee9-b2d1-a238b6752f58" />
+    </filter>
+    <link-entity name="workflow" from="workflowid" to="regardingobjectid" alias="wf" link-type="inner">
+      <attribute name="name" />
+    </link-entity>
+    <link-entity name="flowlog" from="flowsessionid" to="flowsessionid" alias="fl" link-type="outer">
+      <attribute name="flowlogid" />
+      <attribute name="createdon" />
+      <attribute name="data" />
+      <attribute name="type" />
+      <attribute name="level" />
+      <link-entity name="workqueueitem" from="workqueueitemid" to="workqueueitemid" alias="wqi" link-type="outer">
+        <attribute name="name" />
+        <attribute name="createdon" />
+      </link-entity>
+    </link-entity>
+    <link-entity name="systemuser" from="systemuserid" to="createdby" alias="user" link-type="inner">
+      <attribute name="fullname" />
+      <attribute name="domainname" />
+    </link-entity>
+  </entity>
+</fetch>

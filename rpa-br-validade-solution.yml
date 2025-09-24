@@ -1,0 +1,104 @@
+name: 'CI-CD-$(Date:yyyyMMdd).$(Rev:.r)'
+trigger: none
+pr: none
+
+variables:
+  - group: full-cycle-constants
+
+stages:
+
+  - stage: Init
+    displayName: 'Dev: Build'
+    jobs:
+      - job: init
+        displayName: 'Dev: Setup'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: PowerPlatformToolInstaller@2
+            displayName: 'Dev: Instalar PAC CLI'
+            inputs:
+              DefaultVersion: false
+              AddToolsToPath: true
+
+          - task: AzureCLI@2
+            displayName: 'Dev: Login & PAC Auth'
+            inputs:
+              azureSubscription: $(Service_Connection_AzureTask)
+              addSpnToEnvironment: true
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                pac auth create \
+                  --name pipelineAuth \
+                  --environment "$(environmentUrlDev)" \
+                  --applicationId "$(Application_Id_Dev)" \
+                  --tenant "$tenantId" \
+                  --azureDevOpsFederated
+
+                pac auth select --name pipelineAuth
+                
+                chmod +x scripts/pac/pre_requisites_pac.sh
+                scripts/pac/pre_requisites_pac.sh \
+                  --environment-name "$(environmentDev)" \
+                  --application-id   "$(Application_Id_Dev)" \
+                  --tenant-id        "$tenantId"
+            env:
+              PAC_ADO_ID_TOKEN_REQUEST_TOKEN: $(System.AccessToken)
+              PAC_ADO_ID_TOKEN_REQUEST_URL: >-
+                $(System.OidcRequestUri)?serviceConnectionId=$(Service_Connection_Dev)&api-version=7.2-preview.1
+              servicePrincipalId: $servicePrincipalId
+              idToken:           $idToken
+              tenantId:          $tenantId
+
+  - template: templates/pack-stage.yml
+    parameters:
+      solutionName:    $(solutionName)
+      environmentName: $(environmentDev)
+      environmentUrl :  $(environmentUrlDev)
+      directory:       $(Build.SourcesDirectory)
+      artifactDir:     $(Build.ArtifactStagingDirectory)
+      conn:            $(Service_Connection_Dev)
+      connAzCli:       $(Service_Connection_AzureCli)
+      connAzTask:      $(Service_Connection_AzureTask)
+      appId:           $(Application_Id_Dev)
+
+  - template: templates/deploy-qa-stage.yml
+    parameters:
+      solutionName:    $(solutionName)
+      environmentName: $(envQA)
+      environmentUrl:  $(environmentUrlQA)
+      directory:       $(Build.SourcesDirectory)
+      artifactDir:     $(Build.ArtifactStagingDirectory)
+      conn:            $(Service_Connection_Dev)
+      connAzCli:       $(Service_Connection_AzureCli)
+      connAzTask:      $(Service_Connection_AzureTask)
+      appIdAz:         $(Application_Id_AzureCli)
+      appId:           $(Application_Id_Dev)
+      emailQa:         $(Service_Account_Email_QA)
+
+  - template: templates/validate-stage.yml
+    parameters:
+      solutionName:    $(solutionName)
+      environmentName: $(environmentDev)
+      environmentUrl:  $(environmentUrlDev)
+      directory:       $(Build.SourcesDirectory)
+      artifactDir:     $(Build.ArtifactStagingDirectory)
+      conn:            $(Service_Connection_Dev)
+      connAzCli:       $(Service_Connection_AzureCli)
+      connAzTask:      $(Service_Connection_AzureTask)
+      appId:           $(Application_Id_Dev)
+      appIdAz:         $(Application_Id_AzureCli)
+
+  - template: templates/request-approval-stage.yml
+    parameters:
+      solutionName:    $(solutionName)
+      environmentUrl:  $(environmentUrlPrd)
+      directory:       $(Build.SourcesDirectory)
+      artifactDir:     $(Build.ArtifactStagingDirectory)
+      conn:            $(Service_Connection_Dev)
+      connAzCli:       $(Service_Connection_AzureCli)
+      connAzTask:      $(Service_Connection_AzureTask)
+      appId:           $(Application_Id_Dev)
+      emailRequested:  $(emailRequested)
+      emailQa:         $(Service_Account_Email_QA)

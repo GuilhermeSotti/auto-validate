@@ -1,0 +1,75 @@
+parameters:
+  - name: solutionName    
+    type: string
+  - name: environmentName
+    type: string
+  - name: environmentUrl
+    type: string
+  - name: directory
+    type: string
+  - name: artifactDir
+    type: string
+  - name: conn
+    type: string
+  - name: connAzCli
+    type: string
+  - name: connAzTask
+    type: string
+  - name: appId
+    type: string
+
+stages:
+  - stage: pack
+    displayName: '📦 Empacotar Solução DEV'
+    condition: eq(variables['ferramenta'], 'PAD')
+    dependsOn: init
+    jobs:
+      - job: pack_solution
+        displayName: '📦 Empacotar Solução'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+            persistCredentials: true
+            displayName: 'Dev: Checkout'
+
+          - task: PowerPlatformToolInstaller@2
+            displayName: 'Dev: Instalar Power Platform CLI'
+            inputs:
+              DefaultVersion: false
+              AddToolsToPath: true
+
+          - task: AzureCLI@2
+            displayName: '🚀 Exportar Solução ${{ parameters.solutionName }}'
+            inputs:
+              azureSubscription: ${{ parameters.connAzTask }}
+              addSpnToEnvironment: true
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                pac auth create \
+                  --name pipelineAuth \
+                  --environment "${{ parameters.environmentUrl }}" \
+                  --applicationId "${{ parameters.appId }}" \
+                  --tenant "$tenantId" \
+                  --azureDevOpsFederated
+
+                pac auth select --name pipelineAuth
+
+                chmod +x scripts/pac/export_solution.sh
+                scripts/pac/export_solution.sh \
+                  --solution-name    "${{ parameters.solutionName }}" \
+                  --source-dir       '${{ parameters.directory }}/bot_cab' \
+                  --output-dir       '${{ parameters.artifactDir }}'
+            env:
+              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+              PAC_ADO_ID_TOKEN_REQUEST_TOKEN: $(System.AccessToken)
+              PAC_ADO_ID_TOKEN_REQUEST_URL: >-
+                $(System.OidcRequestUri)?serviceConnectionId=${{ parameters.conn }}&api-version=7.2-preview.1
+              servicePrincipalId: $servicePrincipalId
+              idToken:           $idToken
+              tenantId:          $tenantId
+
+          - publish: '${{ parameters.artifactDir }}'
+            displayName: '💾 Armazenar Artefato'
+            artifact: 'solution-managed'

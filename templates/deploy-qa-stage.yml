@@ -1,0 +1,188 @@
+parameters:
+  - name: solutionName
+    type: string
+  - name: environmentName
+    type: string
+  - name: environmentUrl
+    type: string
+  - name: directory
+    type: string
+  - name: artifactDir
+    type: string
+  - name: conn
+    type: string
+  - name: connAzCli
+    type: string
+  - name: connAzTask
+    type: string
+  - name: appId
+    type: string
+  - name: emailQa
+    type: string
+  - name: appIdAz
+    type: string
+
+stages:
+  - stage: deploy_qa
+    displayName: '🚀 Implantar em QA'
+    condition: eq(variables['ferramenta'], 'PAD')
+    dependsOn: 
+    - init
+    - pack
+    jobs:
+      - job: deploy_to_qa
+        displayName: '🚀 Deploy para QA'
+        pool:
+          vmImage: 'windows-latest'
+        steps:
+          - checkout: self
+            displayName: 'Dev: Checkout'
+            persistCredentials: true
+
+          - task: PowerPlatformToolInstaller@2
+            displayName: 'Dev: Instalar PAC CLI'
+            inputs:
+              DefaultVersion: false
+              AddToolsToPath: true
+              
+          - ${{ if ne(variables['isCitizen'], 'true') }}:
+            - task: DownloadBuildArtifacts@1
+              displayName: '⬇️ Baixar Artefato'
+              inputs:
+                buildType: 'current'
+                downloadType: 'single'
+                artifactName: 'solution-managed'
+                downloadPath: '${{ parameters.directory }}/bot_cab'
+                
+            #- task: AzureCLI@2
+            #  displayName: 'Dev: Importar QA'
+            #  inputs:
+            #    azureSubscription: ${{ parameters.connAzTask }}
+            #    addSpnToEnvironment: true
+            #    scriptType: bash
+            #    scriptLocation: inlineScript
+            #    inlineScript: |
+            #      pac auth create \
+            #        --name pipelineAuth \
+            #        --environment "${{ parameters.environmentUrl }}" \
+            #        --applicationId "${{ parameters.appId }}" \
+            #        --tenant "$tenantId" \
+            #        --azureDevOpsFederated
+
+            #      pac auth select --name pipelineAuth
+
+            #      chmod +x scripts/pac/import_prep_connections.sh
+            #      scripts/pac/import_prep_connections.sh \
+            #        --env-from "${{ parameters.environmentUrl }}" \
+            #        --env-to "${{ parameters.environmentUrl }}" \
+            #        --settings-file "${{ parameters.directory }}/bot_cab/solutions/${{ parameters.solutionName }}/deployment-settings.json" \
+            #        --ado-service-connection "${{ parameters.appIdAz }}" \
+            #        --app-display-name "pipeline-auto-app-{{ parameters.solutionName }}" \
+            #        --debug
+            #  env:
+            #    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+            #    AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)
+            #    AZDO_ORG: $(System.TeamFoundationCollectionUri)
+            #    AZDO_PROJECT: $(System.TeamProject)
+            #    PAC_ADO_ID_TOKEN_REQUEST_TOKEN: $(System.AccessToken)
+            #    PAC_ADO_ID_TOKEN_REQUEST_URL: >-
+            #      $(System.OidcRequestUri)?serviceConnectionId=${{ parameters.conn }}&api-version=7.2-preview.1
+            #    servicePrincipalId: $servicePrincipalId
+            #    idToken:           $idToken
+            #    tenantId:          $tenantId
+            #  continueOnError: true
+
+            - task: AzureCLI@2
+              displayName: '🔄 Importar QA'
+              inputs:
+                azureSubscription: ${{ parameters.connAzTask }}
+                addSpnToEnvironment: true
+                scriptType: bash
+                scriptLocation: inlineScript
+                inlineScript: |
+                  pac auth create \
+                    --name pipelineAuth \
+                    --environment "${{ parameters.environmentUrl }}" \
+                    --applicationId "${{ parameters.appId }}" \
+                    --tenant "$tenantId" \
+                    --azureDevOpsFederated
+
+                  pac auth select --name pipelineAuth
+
+                  chmod +x scripts/pac/import_solution.sh
+                  scripts/pac/import_solution.sh \
+                    --solution-name "${{ parameters.solutionName }}" \
+                    --env-to        "${{ parameters.environmentUrl }}" \
+                    --solution-zip  "${{ parameters.directory }}/bot_cab/solutions/${{ parameters.solutionName }}/${{ parameters.solutionName }}_managed.zip" \
+                    --settings-file "${{ parameters.directory }}/bot_cab/solutions/${{ parameters.solutionName }}/deployment-settings.json" \
+                    --timeout       120
+              env:
+                PAC_ADO_ID_TOKEN_REQUEST_TOKEN: $(System.AccessToken)
+                PAC_ADO_ID_TOKEN_REQUEST_URL: >-
+                  $(System.OidcRequestUri)?serviceConnectionId=${{ parameters.conn }}&api-version=7.2-preview.1
+                servicePrincipalId: $servicePrincipalId
+                idToken:           $idToken
+                tenantId:          $tenantId
+              continueOnError: true
+
+            #- task: AzureCLI@2
+            #  displayName: '🔄 Compartilhar QA'
+            #  inputs:
+            #    azureSubscription: ${{ parameters.connAzCli }}
+            #    addSpnToEnvironment: true
+            #    scriptType: bash
+            #    scriptLocation: inlineScript
+            #    inlineScript: |
+            #      pac auth create \
+            #        --name pipelineAuth \
+            #        --environment "${{ parameters.environmentUrl }}" \
+            #        --applicationId "${{ parameters.appId }}" \
+            #        --tenant "$tenantId" \
+            #        --azureDevOpsFederated
+
+            #      pac auth select --name pipelineAuth
+
+            #      chmod +x scripts/pac/share_resources.sh
+            #      scripts/pac/share_resources.sh \
+            #        --solution-name "${{ parameters.solutionName }}" \
+            #        --env-from      "${{ parameters.environmentUrl }}" \
+            #        --share-emails  "${{ parameters.emailQa }}"
+            #  env:
+            #    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+            #    PAC_ADO_ID_TOKEN_REQUEST_TOKEN: $(System.AccessToken)
+            #    PAC_ADO_ID_TOKEN_REQUEST_URL: >-
+            #      $(System.OidcRequestUri)?serviceConnectionId=${{ parameters.conn }}&api-version=7.2-preview.1
+            #    servicePrincipalId: $servicePrincipalId
+            #    idToken:           $idToken
+            #    tenantId:          $tenantId
+            #  continueOnError: true
+
+          - task: Bash@3
+            displayName: 'Dev: Cria/atualiza branch PR'
+            inputs:
+              targetType: 'inline'
+              script: |
+                chmod +x scripts/pr/pr_request.sh
+                scripts/pr/pr_request.sh "${{ parameters.solutionName }}" "main"
+            env:
+              BUILD_REQUESTEDFOR: $(Build.RequestedFor)
+              BUILD_REQUESTEDFOREMAIL: $(Build.RequestedForEmail)
+              BUILD_REQUESTEDBY: $(Build.RequestedBy)
+              BUILD_BUILDID: $(Build.BuildId)
+              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+          - task: CreatePullRequest@1
+            displayName: '🔀 Criar Pull Request QA'
+            inputs:
+              repoType: 'Azure DevOps'
+              repositorySelector: 'currentBuild'
+              sourceBranch: 'refs/heads/pr/${{ parameters.solutionName }}'
+              targetBranch: 'refs/heads/main'
+              title: 'Deploy ${{ parameters.solutionName }} $(Build.BuildId)'
+              description: 'Deploy automático gerado pela pipeline'
+              reviewers: '${{ parameters.emailQa }}'
+              autoComplete: true
+              mergeStrategy: 'squash'
+              deleteSource: true
+              transitionWorkItems: true
+              alwaysCreatePr: true
